@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1020179078009",
+    "project_id": "habit-flow-platform",
+    "storage_bucket": "habit-flow-platform.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1020179078009:android:af316087b95bfdebe7eda8",
+        "android_client_info": {
+          "package_name": "pro.branium.habitflow"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZ6uNU8pRqvwaNwBs1jdSJWVoKq-xqku4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
