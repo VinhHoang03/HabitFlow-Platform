@@ -21,10 +21,20 @@ class UserModel {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'email': email,
-      'avatar': avatar,
-    };
+    return {'name': name, 'email': email, 'avatar': avatar};
+  }
+
+  UserModel copyWith({
+    String? userId,
+    String? name,
+    String? email,
+    String? avatar,
+  }) {
+    return UserModel(
+      userId: userId ?? this.userId,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      avatar: avatar ?? this.avatar,
+    );
   }
 }

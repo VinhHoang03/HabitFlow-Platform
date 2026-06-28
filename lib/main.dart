@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/habit_provider.dart';
 import 'screens/home_screen.dart';
@@ -8,12 +9,8 @@ import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // IMPORTANT: You need to initialize Firebase here. 
-  // Make sure you have added google-services.json (Android) or GoogleService-Info.plist (iOS)
-  // and configured the project in Firebase Console.
-  await Firebase.initializeApp();
-  print("Firebase OK");
-  
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   runApp(const MyApp());
 }
 
@@ -30,8 +27,41 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'HabitFlow',
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF0F766E),
+            secondary: const Color(0xFFF97316),
+            tertiary: const Color(0xFF2563EB),
+          ),
           useMaterial3: true,
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+          cardTheme: CardThemeData(
+            clipBehavior: Clip.antiAlias,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
         ),
         home: const AuthWrapper(),
       ),
@@ -45,8 +75,7 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
-    
-    // If the user is logged in, show HomeScreen, otherwise LoginScreen
+
     if (authProvider.user != null) {
       return const HomeScreen();
     } else {
