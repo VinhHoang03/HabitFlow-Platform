@@ -1,30 +1,44 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:habitflow/main.dart';
+import 'package:habitflow/providers/statistics_provider.dart';
+import 'package:habitflow/screens/achievement_screen.dart';
+import 'package:habitflow/screens/stats_screen.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Statistics screen displays empty progress state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => StatisticsProvider(),
+        child: const MaterialApp(home: StatsScreen()),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('Statistics'), findsOneWidget);
+    expect(find.text('Completion'), findsOneWidget);
+    expect(find.text('0%'), findsOneWidget);
+    expect(find.text('Weekly Statistics'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Monthly Statistics'), findsOneWidget);
+  });
+
+  testWidgets('Achievement screen displays default badges', (tester) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => StatisticsProvider(),
+        child: const MaterialApp(home: AchievementScreen()),
+      ),
+    );
+
+    expect(find.text('Achievements'), findsOneWidget);
+    expect(find.text('First Win'), findsOneWidget);
+    expect(find.text('3-Day Streak'), findsOneWidget);
+    expect(find.text('7-Day Streak'), findsOneWidget);
+    expect(find.text('10 Check-ins'), findsOneWidget);
   });
 }

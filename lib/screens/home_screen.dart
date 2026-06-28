@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/habit_provider.dart';
+import '../providers/statistics_provider.dart';
 import '../models/habit_model.dart';
 import 'stats_screen.dart';
+import 'achievement_screen.dart';
 import 'calendar_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,8 +23,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (authProvider.user != null) {
-      Provider.of<HabitProvider>(context, listen: false)
-          .fetchHabits(authProvider.user!.uid);
+      Provider.of<HabitProvider>(
+        context,
+        listen: false,
+      ).fetchHabits(authProvider.user!.uid);
     }
   }
 
@@ -36,10 +40,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final habitProvider = Provider.of<HabitProvider>(context);
+    final user = authProvider.user;
+
+    if (user != null) {
+      Provider.of<StatisticsProvider>(
+        context,
+        listen: false,
+      ).watchUserStats(user.uid, habitProvider.habits);
+    }
 
     final List<Widget> pages = [
       _buildHabitList(habitProvider, authProvider),
       const StatsScreen(),
+      const AchievementScreen(),
       const CalendarScreen(),
     ];
 
@@ -58,22 +71,34 @@ class _HomeScreenState extends State<HomeScreen> {
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Stats'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Calendar'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.emoji_events),
+            label: 'Badges',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today),
+            label: 'Calendar',
+          ),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.teal,
         onTap: _onItemTapped,
       ),
-      floatingActionButton: _selectedIndex == 0 
-        ? FloatingActionButton(
-            onPressed: () => _showAddHabitDialog(context, authProvider.user!.uid),
-            child: const Icon(Icons.add),
-          )
-        : null,
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              onPressed: user == null
+                  ? null
+                  : () => _showAddHabitDialog(context, user.uid),
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 
-  Widget _buildHabitList(HabitProvider habitProvider, AuthProvider authProvider) {
+  Widget _buildHabitList(
+    HabitProvider habitProvider,
+    AuthProvider authProvider,
+  ) {
     return habitProvider.habits.isEmpty
         ? const Center(child: Text('No habits yet. Add one!'))
         : ListView.builder(
@@ -86,7 +111,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 trailing: Checkbox(
                   value: false,
                   onChanged: (val) {
-                    habitProvider.completeHabit(habit.habitId, DateTime.now(), val ?? false);
+                    habitProvider.completeHabit(
+                      habit.habitId,
+                      DateTime.now(),
+                      val ?? false,
+                    );
                   },
                 ),
               );
@@ -105,12 +134,21 @@ class _HomeScreenState extends State<HomeScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Title')),
-            TextField(controller: categoryController, decoration: const InputDecoration(labelText: 'Category')),
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            TextField(
+              controller: categoryController,
+              decoration: const InputDecoration(labelText: 'Category'),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () {
               final habit = HabitModel(
@@ -122,7 +160,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 targetPerDay: 1,
                 createdAt: DateTime.now(),
               );
-              Provider.of<HabitProvider>(context, listen: false).addHabit(habit);
+              Provider.of<HabitProvider>(
+                context,
+                listen: false,
+              ).addHabit(habit);
               Navigator.pop(context);
             },
             child: const Text('Add'),
