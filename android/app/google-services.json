@@ -12,7 +12,20 @@
           "package_name": "pro.branium.habitflow"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1020179078009-1jh806hm1agjcbldq0f8r8o793q32srh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "pro.branium.habitflow",
+            "certificate_hash": "8bdcaee13a5b129b1a03f3b1bc08ef12a3a77584"
+          }
+        },
+        {
+          "client_id": "1020179078009-3t5n5s1v2jm5ugrl19n268ebjq43b4dm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDZ6uNU8pRqvwaNwBs1jdSJWVoKq-xqku4"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1020179078009-3t5n5s1v2jm5ugrl19n268ebjq43b4dm.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
