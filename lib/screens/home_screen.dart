@@ -62,28 +62,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
     final habitProvider = Provider.of<HabitProvider>(context);
 
     final List<Widget> pages = [
       _buildHabitList(habitProvider),
       const StatsScreen(),
       const CalendarScreen(),
+      const ProfileScreen(),
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFBF8F7),
+      backgroundColor: const Color(0xFFFCF8FC),
       body: Stack(
         children: [
-          Positioned.fill(child: pages[_selectedIndex]),
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 0),
+              child: pages[_selectedIndex],
+            ),
+          ),
           Positioned(
-            left: 24,
-            right: 24,
-            bottom: 22,
-            child: _TiimoBottomNav(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _DashboardBottomNav(
               selectedIndex: _selectedIndex,
               onSelected: _onItemTapped,
-              onAccountPressed: () => _showAccountMenu(authProvider),
             ),
           ),
         ],
@@ -1352,59 +1356,62 @@ class _HabitChip extends StatelessWidget {
 
 enum _AccountAction { profile, changePassword, logout }
 
-class _TiimoBottomNav extends StatelessWidget {
+class _DashboardBottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
-  final VoidCallback onAccountPressed;
 
-  const _TiimoBottomNav({
+  const _DashboardBottomNav({
     required this.selectedIndex,
     required this.onSelected,
-    required this.onAccountPressed,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 76,
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.94),
-        borderRadius: BorderRadius.circular(999),
+        color: Colors.white,
+        border: Border(top: BorderSide(color: const Color(0xFFC8C5CF).withOpacity(0.2))),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.07),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
+            color: const Color(0xFF4D4B72).withOpacity(0.05),
+            blurRadius: 30,
+            offset: const Offset(0, -10),
           ),
         ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _NavIcon(
-            icon: Icons.check_box_outlined,
-            selectedIcon: Icons.check_box,
-            selected: selectedIndex == 0,
-            onTap: () => onSelected(0),
+          _NavButton(
+            icon: Icons.home_outlined,
+            label: 'Home',
+            selected: false, // Placeholder
+            onTap: () {},
           ),
-          _NavIcon(
-            icon: Icons.calendar_today_outlined,
-            selectedIcon: Icons.calendar_today,
-            selected: selectedIndex == 2,
-            onTap: () => onSelected(2),
+          _NavButton(
+            icon: Icons.insights_outlined,
+            label: 'Mood Stat',
+            selected: false, // Placeholder
+            onTap: () {},
           ),
-          _NavIcon(
-            icon: Icons.bar_chart_rounded,
-            selectedIcon: Icons.bar_chart_rounded,
+          _NavButton(
+            icon: Icons.assessment,
+            label: 'Report',
             selected: selectedIndex == 1,
             onTap: () => onSelected(1),
           ),
-          _NavIcon(
-            icon: Icons.account_circle_outlined,
-            selectedIcon: Icons.account_circle_rounded,
-            selected: false,
-            onTap: onAccountPressed,
+          _NavButton(
+            icon: Icons.check_circle_outline,
+            label: 'My Habits',
+            selected: selectedIndex == 0,
+            onTap: () => onSelected(0),
+          ),
+          _NavButton(
+            icon: Icons.person_outline,
+            label: 'Account',
+            selected: selectedIndex == 3,
+            onTap: () => onSelected(3),
           ),
         ],
       ),
@@ -1412,35 +1419,50 @@ class _TiimoBottomNav extends StatelessWidget {
   }
 }
 
-class _NavIcon extends StatelessWidget {
+class _NavButton extends StatelessWidget {
   final IconData icon;
-  final IconData selectedIcon;
+  final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  const _NavIcon({
+  const _NavButton({
     required this.icon,
-    required this.selectedIcon,
+    required this.label,
     required this.selected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? const Color(0xFFEDECEA) : Colors.transparent,
-      borderRadius: BorderRadius.circular(26),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox(
-          width: 58,
-          height: 58,
-          child: Icon(
-            selected ? selectedIcon : icon,
-            color: selected ? const Color(0xFF171313) : const Color(0xFF77716E),
-            size: 30,
-          ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: selected
+            ? BoxDecoration(
+                color: const Color(0xFFE7DBF1),
+                borderRadius: BorderRadius.circular(999),
+              )
+            : null,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: selected ? const Color(0xFF685F72) : const Color(0xFF47464E),
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: selected ? const Color(0xFF685F72) : const Color(0xFF47464E),
+              ),
+            ),
+          ],
         ),
       ),
     );

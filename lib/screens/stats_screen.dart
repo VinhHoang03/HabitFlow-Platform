@@ -1,11 +1,28 @@
 ﻿import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:intl/intl.dart';
 
 import '../models/habit_completion_model.dart';
 import '../models/habit_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/habit_provider.dart';
+
+enum ReportFilter {
+  today('Today'),
+  thisWeek('This Week'),
+  thisMonth('This Month'),
+  lastMonth('Last Month'),
+  last6Months('Last 6 Months'),
+  thisYear('This Year'),
+  lastYear('Last Year'),
+  allTime('All Time'),
+  customRange('Custom Range');
+
+  final String label;
+  const ReportFilter(this.label);
+}
 
 class StatsScreen extends StatelessWidget {
   const StatsScreen({super.key});
@@ -17,115 +34,136 @@ class StatsScreen extends StatelessWidget {
     final userId = authProvider.user?.uid;
 
     if (userId == null) {
-      return const Center(child: Text('Vui lòng đăng nhập để xem thống kê.'));
+      return const Scaffold(
+        backgroundColor: Color(0xFFFCF8FC),
+        body: Center(child: Text('Vui lòng đăng nhập để xem thống kê.')),
+      );
     }
 
-    return Container(
-      color: const Color(0xFFFBF8F7),
-      child: SafeArea(
-        child: StreamBuilder<List<HabitCompletionModel>>(
-          stream: habitProvider.streamUserCompletions(userId),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final completions = (snapshot.data ?? [])
-                .where((completion) => completion.isCompleted)
-                .toList();
-            final activeHabits = habitProvider.habits
-                .where((habit) => habit.status == HabitStatus.active)
-                .toList();
-            final weekCounts = _weeklyCounts(completions);
-            final totalCompleted = completions.length;
-            final completedToday = completions
-                .where((completion) => _isSameDay(completion.date, DateTime.now()))
-                .length;
-            final currentStreak = _currentUserStreak(completions);
-            final completionRate = _completionRate(
-              activeHabits: activeHabits,
-              completions: completions,
-            );
-
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(22, 14, 22, 110),
-              children: [
-                const Text(
-                  'Thống kê',
-                  style: TextStyle(
-                    fontFamily: 'serif',
-                    fontSize: 44,
-                    height: 1.05,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF171313),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Theo dõi nhịp xây dựng thói quen của bạn.',
-                  style: TextStyle(fontSize: 17, color: Color(0xFF4D4747)),
-                ),
-                const SizedBox(height: 22),
-                _StreakHero(streak: currentStreak),
-                const SizedBox(height: 18),
-                _MetricSplitCard(
-                  streak: currentStreak,
-                  completedToday: completedToday,
-                  activeHabits: activeHabits.length,
-                ),
-                const SizedBox(height: 18),
-                _RatePanel(rate: completionRate),
-                const SizedBox(height: 18),
-                _StatStrip(
-                  totalCompleted: totalCompleted,
-                  activeHabits: activeHabits.length,
-                ),
-                const SizedBox(height: 18),
-                _ChartPanel(counts: weekCounts),
-              ],
-            );
-          },
+    return Scaffold(
+      backgroundColor: const Color(0xFFFCF8FC),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFCF8FC),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF36345A)),
+          onPressed: () {},
         ),
+        title: const Text(
+          'Report',
+          style: TextStyle(
+            color: Color(0xFF36345A),
+            fontWeight: FontWeight.w700,
+            fontSize: 20,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Color(0xFF36345A)),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: StreamBuilder<List<HabitCompletionModel>>(
+        stream: habitProvider.streamUserCompletions(userId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final completions = snapshot.data ?? [];
+          final completedOnly = completions.where((c) => c.isCompleted).toList();
+          final activeHabits = habitProvider.habits
+              .where((habit) => habit.status == HabitStatus.active)
+              .toList();
+
+          final currentStreak = _currentUserStreak(completedOnly);
+          final totalCompleted = completedOnly.length;
+          final perfectDays = _totalPerfectDays(activeHabits, completions);
+          final completionRate = _completionRate(
+            activeHabits: activeHabits,
+            completions: completedOnly,
+          );
+
+          return ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            children: [
+              _QuickStatsGrid(
+                currentStreak: currentStreak,
+                completionRate: completionRate,
+                totalCompleted: totalCompleted,
+                perfectDays: perfectDays,
+              ),
+              const SizedBox(height: 24),
+              _HabitsCompletedSection(completions: completedOnly),
+              const SizedBox(height: 24),
+              _CompletionRateAreaSection(completions: completedOnly, activeHabits: activeHabits),
+              const SizedBox(height: 24),
+              _CalendarStatsSection(completions: completedOnly),
+              const SizedBox(height: 24),
+              _MoodChartSection(),
+              const SizedBox(height: 100), // Space for bottom nav
+            ],
+          );
+        },
       ),
     );
   }
 
-  List<int> _weeklyCounts(List<HabitCompletionModel> completions) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final monday = today.subtract(Duration(days: today.weekday - 1));
-    final counts = List<int>.filled(7, 0);
-
-    for (final completion in completions) {
-      final date = DateTime(
-        completion.date.year,
-        completion.date.month,
-        completion.date.day,
-      );
-      final index = date.difference(monday).inDays;
-      if (index >= 0 && index < counts.length) counts[index]++;
-    }
-    return counts;
-  }
-
-  int _currentUserStreak(List<HabitCompletionModel> completions) {
-    final completedDates = completions
-        .map((completion) => DateTime(
-              completion.date.year,
-              completion.date.month,
-              completion.date.day,
-            ))
+  int _currentUserStreak(List<HabitCompletionModel> completedOnly) {
+    if (completedOnly.isEmpty) return 0;
+    final completedDates = completedOnly
+        .map((c) => DateTime(c.date.year, c.date.month, c.date.day))
         .toSet();
     var day = DateTime.now();
     day = DateTime(day.year, day.month, day.day);
     var streak = 0;
+
+    if (!completedDates.contains(day)) {
+      day = day.subtract(const Duration(days: 1));
+    }
 
     while (completedDates.contains(day)) {
       streak++;
       day = day.subtract(const Duration(days: 1));
     }
     return streak;
+  }
+
+  int _totalPerfectDays(List<HabitModel> activeHabits, List<HabitCompletionModel> completions) {
+    if (activeHabits.isEmpty) return 0;
+    
+    final completedByDate = <DateTime, Set<String>>{};
+    for (final comp in completions) {
+      if (!comp.isCompleted) continue;
+      final d = DateTime(comp.date.year, comp.date.month, comp.date.day);
+      completedByDate.putIfAbsent(d, () => {}).add(comp.habitId);
+    }
+    
+    int perfectDays = 0;
+    final startDate = activeHabits.map((h) => h.startDate).reduce((a, b) => a.isBefore(b) ? a : b);
+    var current = DateTime(startDate.year, startDate.month, startDate.day);
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    
+    while (!current.isAfter(todayOnly)) {
+      final habitsOnDay = activeHabits.where((h) => !h.startDate.isAfter(current)).toList();
+      if (habitsOnDay.isNotEmpty) {
+        final completedOnDay = completedByDate[current] ?? {};
+        bool allDone = true;
+        for (final h in habitsOnDay) {
+          if (!completedOnDay.contains(h.habitId)) {
+            allDone = false;
+            break;
+          }
+        }
+        if (allDone) perfectDays++;
+      }
+      current = current.add(const Duration(days: 1));
+    }
+    return perfectDays;
   }
 
   int _completionRate({
@@ -144,6 +182,7 @@ class StatsScreen extends StatelessWidget {
         habit.startDate.month,
         habit.startDate.day,
       );
+      if (startDate.isAfter(todayOnly)) continue;
       expected += todayOnly.difference(startDate).inDays + 1;
     }
     if (expected <= 0) return 0;
@@ -154,234 +193,97 @@ class StatsScreen extends StatelessWidget {
         .length;
     return ((completedCount / expected) * 100).clamp(0, 100).round();
   }
-
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
 }
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
+class _SoftCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
 
-  const _StatCard({required this.label, required this.value, required this.icon});
+  const _SoftCard({required this.child, this.padding});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: padding ?? const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(26),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE5DBFF),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 20),
-          ),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-          ),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Color(0xFF6A6262), fontWeight: FontWeight.w600),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4D4B72).withOpacity(0.05),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
+      child: child,
     );
   }
 }
 
-class _StreakHero extends StatelessWidget {
-  final int streak;
+class _QuickStatsGrid extends StatelessWidget {
+  final int currentStreak;
+  final int completionRate;
+  final int totalCompleted;
+  final int perfectDays;
 
-  const _StreakHero({required this.streak});
+  const _QuickStatsGrid({
+    required this.currentStreak,
+    required this.completionRate,
+    required this.totalCompleted,
+    required this.perfectDays,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 26, 18, 24),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1ECFF),
-        borderRadius: BorderRadius.circular(34),
-      ),
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      childAspectRatio: 1.3,
+      children: [
+        _StatItem(value: '$currentStreak days', label: 'Current streak'),
+        _StatItem(value: '$completionRate%', label: 'Completion rate'),
+        _StatItem(value: NumberFormat('#,###').format(totalCompleted), label: 'Habits completed'),
+        _StatItem(value: '$perfectDays', label: 'Total perfect days'),
+      ],
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _StatItem({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SoftCard(
+      padding: const EdgeInsets.all(24),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
-            height: 118,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: 118,
-                  height: 118,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE3DAFF),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                Container(
-                  width: 88,
-                  height: 88,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFEBDD),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const Icon(Icons.local_fire_department, size: 52),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
           Text(
-            '$streak',
+            value,
             style: const TextStyle(
-              fontFamily: 'serif',
-              fontSize: 58,
-              height: 0.95,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF171313),
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF36345A),
+              fontFamily: 'Plus Jakarta Sans',
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'ngày chuỗi hiện tại',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Giao diện chuỗi mẫu, sẵn sàng gắn API streak ở bước sau.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF6A6262)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricSplitCard extends StatelessWidget {
-  final int streak;
-  final int completedToday;
-  final int activeHabits;
-
-  const _MetricSplitCard({
-    required this.streak,
-    required this.completedToday,
-    required this.activeHabits,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            Expanded(
-              child: _SplitMetric(
-                icon: Icons.local_fire_department,
-                accent: const Color(0xFF8D6BF2),
-                value: '$streak',
-                label: 'CHUỖI NGÀY',
-                footer: '$streak/7 ngày',
-              ),
-            ),
-            Container(width: 1, color: const Color(0xFFEDEAE6)),
-            Expanded(
-              child: _SplitMetric(
-                icon: Icons.check_circle,
-                accent: const Color(0xFF4C9A9A),
-                value: '$completedToday',
-                label: 'ĐÃ HOÀN THÀNH',
-                footer: '$completedToday/$activeHabits nhiệm vụ',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SplitMetric extends StatelessWidget {
-  final IconData icon;
-  final Color accent;
-  final String value;
-  final String label;
-  final String footer;
-
-  const _SplitMetric({
-    required this.icon,
-    required this.accent,
-    required this.value,
-    required this.label,
-    required this.footer,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 22),
-      child: Column(
-        children: [
-          Icon(icon, color: accent, size: 38),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'serif',
-              fontSize: 48,
-              height: 0.98,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF171313),
-            ),
-          ),
-          const SizedBox(height: 8),
           Text(
             label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              letterSpacing: 1.2,
-              height: 1.15,
-              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              color: Color(0xFF47464E),
+              fontFamily: 'Plus Jakarta Sans',
             ),
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              minHeight: 8,
-              value: value == '0' ? 0 : 0.34,
-              backgroundColor: const Color(0xFFEDEBE8),
-              valueColor: AlwaysStoppedAnimation(accent),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            footer,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Color(0xFF6A6262)),
           ),
         ],
       ),
@@ -389,29 +291,82 @@ class _SplitMetric extends StatelessWidget {
   }
 }
 
-class _StatStrip extends StatelessWidget {
-  final int totalCompleted;
-  final int activeHabits;
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final ReportFilter selectedFilter;
+  final ValueChanged<ReportFilter> onFilterChanged;
 
-  const _StatStrip({required this.totalCompleted, required this.activeHabits});
+  const _SectionHeader({
+    required this.title,
+    required this.selectedFilter,
+    required this.onFilterChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Expanded(
-          child: _CompactMetric(
-            label: 'Tổng hoàn thành',
-            value: '$totalCompleted',
-            color: const Color(0xFFE8F1FF),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF36345A),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _CompactMetric(
-            label: 'Đang hoạt động',
-            value: '$activeHabits',
-            color: const Color(0xFFFFF0DC),
+        PopupMenuButton<ReportFilter>(
+          onSelected: (filter) async {
+            if (filter == ReportFilter.customRange) {
+              final range = await showDateRangePicker(
+                context: context,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(),
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: const ColorScheme.light(
+                        primary: Color(0xFF4D4B72),
+                        onPrimary: Colors.white,
+                        surface: Colors.white,
+                        onSurface: Color(0xFF36345A),
+                      ),
+                    ),
+                    child: child!,
+                  );
+                },
+              );
+              if (range != null) {
+                onFilterChanged(filter);
+              }
+            } else {
+              onFilterChanged(filter);
+            }
+          },
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          itemBuilder: (context) => ReportFilter.values.map((filter) {
+            return PopupMenuItem(
+              value: filter,
+              child: Text(filter.label, style: const TextStyle(fontSize: 14)),
+            );
+          }).toList(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F2F6),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFFC8C5CF).withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  selectedFilter.label,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF36345A)),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.expand_more, size: 16, color: Color(0xFF36345A)),
+              ],
+            ),
           ),
         ),
       ],
@@ -419,176 +374,335 @@ class _StatStrip extends StatelessWidget {
   }
 }
 
-class _CompactMetric extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
+class _HabitsCompletedSection extends StatefulWidget {
+  final List<HabitCompletionModel> completions;
 
-  const _CompactMetric({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+  const _HabitsCompletedSection({required this.completions});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(26),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'serif',
-              fontSize: 38,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
-    );
-  }
+  State<_HabitsCompletedSection> createState() => _HabitsCompletedSectionState();
 }
 
-class _RatePanel extends StatelessWidget {
-  final int rate;
-
-  const _RatePanel({required this.rate});
+class _HabitsCompletedSectionState extends State<_HabitsCompletedSection> {
+  ReportFilter _currentFilter = ReportFilter.thisMonth;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-      ),
+    final weekData = _getWeekData();
+    final maxCount = weekData.values.fold(0, (max, val) => val > max ? val : max);
+
+    return _SoftCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Tỷ lệ hoàn thành',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                ),
-              ),
-              Text(
-                '$rate%',
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-              ),
-            ],
+          _SectionHeader(
+            title: 'Habits Completed',
+            selectedFilter: _currentFilter,
+            onFilterChanged: (filter) => setState(() => _currentFilter = filter),
           ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              minHeight: 12,
-              value: rate / 100,
-              backgroundColor: const Color(0xFFE8E2FA),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF9B7CF6)),
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Dựa trên các thói quen đang hoạt động từ ngày bắt đầu.',
-            style: TextStyle(color: Color(0xFF6A6262)),
-          ),
-        ],
-      ),
-    );
-  }
-}
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 160,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: weekData.entries.map((entry) {
+                final day = entry.key;
+                final count = entry.value;
+                final heightFactor = maxCount == 0 ? 0.0 : count / maxCount;
+                final isToday = day == DateTime.now().day;
 
-class _ChartPanel extends StatelessWidget {
-  final List<int> counts;
-
-  const _ChartPanel({required this.counts});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Tiến độ tuần này',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 20),
-          AspectRatio(
-            aspectRatio: 1.65,
-            child: BarChart(
-              BarChartData(
-                maxY: _chartMaxY(counts),
-                barGroups: [
-                  for (var index = 0; index < counts.length; index++)
-                    BarChartGroupData(
-                      x: index,
-                      barRods: [
-                        BarChartRodData(
-                          toY: counts[index].toDouble(),
-                          color: const Color(0xFF9B7CF6),
-                          width: 20,
-                          borderRadius: BorderRadius.circular(8),
+                return Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (isToday && count > 0)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF36345A),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '$count',
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
                         ),
-                      ],
-                    ),
-                ],
-                borderData: FlBorderData(show: false),
+                      Container(
+                        height: (120 * heightFactor).clamp(4, 120),
+                        decoration: BoxDecoration(
+                          color: isToday ? const Color(0xFF4D4B72) : const Color(0xFFD3DDF6),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '$day',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF47464E)),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Map<int, int> _getWeekData() {
+    final now = DateTime.now();
+    final weekDays = <int, int>{};
+    for (int i = 6; i >= 0; i--) {
+      final date = now.subtract(Duration(days: i));
+      weekDays[date.day] = 0;
+    }
+
+    for (final comp in widget.completions) {
+      if (weekDays.containsKey(comp.date.day)) {
+        weekDays[comp.date.day] = (weekDays[comp.date.day] ?? 0) + 1;
+      }
+    }
+    return weekDays;
+  }
+}
+
+class _CompletionRateAreaSection extends StatefulWidget {
+  final List<HabitCompletionModel> completions;
+  final List<HabitModel> activeHabits;
+
+  const _CompletionRateAreaSection({required this.completions, required this.activeHabits});
+
+  @override
+  State<_CompletionRateAreaSection> createState() => _CompletionRateAreaSectionState();
+}
+
+class _CompletionRateAreaSectionState extends State<_CompletionRateAreaSection> {
+  ReportFilter _currentFilter = ReportFilter.last6Months;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            title: 'Habit Completion Rate',
+            selectedFilter: _currentFilter,
+            onFilterChanged: (filter) => setState(() => _currentFilter = filter),
+          ),
+          const SizedBox(height: 24),
+          AspectRatio(
+            aspectRatio: 2,
+            child: LineChart(
+              LineChartData(
                 gridData: const FlGridData(show: false),
                 titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 34,
                       getTitlesWidget: (value, meta) {
-                        const labels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-                        final index = value.toInt();
-                        if (index < 0 || index >= labels.length) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: Text(
-                            labels[index],
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        );
+                        const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        if (value.toInt() < 0 || value.toInt() >= months.length) return const SizedBox();
+                        return Text(months[value.toInt()], style: const TextStyle(fontSize: 12, color: Color(0xFF47464E)));
                       },
+                    ),
+                  ),
+                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: const [
+                      FlSpot(0, 40),
+                      FlSpot(1, 55),
+                      FlSpot(2, 30),
+                      FlSpot(3, 60),
+                      FlSpot(4, 35),
+                      FlSpot(5, 65),
+                    ],
+                    isCurved: true,
+                    color: const Color(0xFF4D4B72),
+                    barWidth: 3,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: const Color(0xFF4D4B72).withOpacity(0.1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarStatsSection extends StatefulWidget {
+  final List<HabitCompletionModel> completions;
+
+  const _CalendarStatsSection({required this.completions});
+
+  @override
+  State<_CalendarStatsSection> createState() => _CalendarStatsSectionState();
+}
+
+class _CalendarStatsSectionState extends State<_CalendarStatsSection> {
+  ReportFilter _currentFilter = ReportFilter.thisMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            title: 'Calendar Stats',
+            selectedFilter: _currentFilter,
+            onFilterChanged: (filter) => setState(() => _currentFilter = filter),
+          ),
+          const SizedBox(height: 16),
+          TableCalendar(
+            firstDay: DateTime.utc(2020, 1, 1),
+            lastDay: DateTime.utc(2030, 12, 31),
+            focusedDay: DateTime.now(),
+            headerStyle: const HeaderStyle(
+              formatButtonVisible: false,
+              titleCentered: true,
+              titleTextStyle: TextStyle(color: Color(0xFF36345A), fontWeight: FontWeight.bold, fontSize: 16),
+              leftChevronIcon: Icon(Icons.chevron_left, color: Color(0xFF36345A)),
+              rightChevronIcon: Icon(Icons.chevron_right, color: Color(0xFF36345A)),
+            ),
+            daysOfWeekStyle: const DaysOfWeekStyle(
+              weekdayStyle: TextStyle(color: Color(0xFF78767F), fontSize: 11, fontWeight: FontWeight.bold),
+              weekendStyle: TextStyle(color: Color(0xFF78767F), fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+            calendarStyle: const CalendarStyle(
+              defaultTextStyle: TextStyle(color: Color(0xFF47464E)),
+              todayDecoration: BoxDecoration(color: Color(0xFFE7DBF1), shape: BoxShape.circle),
+              todayTextStyle: TextStyle(color: Color(0xFF36345A), fontWeight: FontWeight.bold),
+              selectedDecoration: BoxDecoration(color: Color(0xFF4D4B72), shape: BoxShape.circle),
+              markerDecoration: BoxDecoration(color: Color(0xFF4D4B72), shape: BoxShape.circle),
+            ),
+            calendarBuilders: CalendarBuilders(
+              markerBuilder: (context, date, events) {
+                final hasCompletion = widget.completions.any((c) => isSameDay(c.date, date));
+                if (hasCompletion) {
+                  return Container(
+                    margin: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFF4D4B72), width: 1),
+                      shape: BoxShape.circle,
+                    ),
+                  );
+                }
+                return null;
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoodChartSection extends StatefulWidget {
+  const _MoodChartSection();
+
+  @override
+  State<_MoodChartSection> createState() => _MoodChartSectionState();
+}
+
+class _MoodChartSectionState extends State<_MoodChartSection> {
+  ReportFilter _currentFilter = ReportFilter.thisMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            title: 'Mood Chart',
+            selectedFilter: _currentFilter,
+            onFilterChanged: (filter) => setState(() => _currentFilter = filter),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('😎', style: TextStyle(fontSize: 20)),
+                  SizedBox(height: 12),
+                  Text('😊', style: TextStyle(fontSize: 20)),
+                  SizedBox(height: 12),
+                  Text('😐', style: TextStyle(fontSize: 20)),
+                  SizedBox(height: 12),
+                  Text('😔', style: TextStyle(fontSize: 20)),
+                  SizedBox(height: 12),
+                  Text('😡', style: TextStyle(fontSize: 20)),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: AspectRatio(
+                  aspectRatio: 1.5,
+                  child: LineChart(
+                    LineChartData(
+                      gridData: const FlGridData(show: false),
+                      titlesData: FlTitlesData(
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              final days = ['16', '17', '18', '19', '20', '21', '22'];
+                              if (value.toInt() < 0 || value.toInt() >= days.length) return const SizedBox();
+                              return Text(days[value.toInt()], style: const TextStyle(fontSize: 12, color: Color(0xFF47464E)));
+                            },
+                          ),
+                        ),
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: const [
+                            FlSpot(0, 4),
+                            FlSpot(1, 3),
+                            FlSpot(2, 5),
+                            FlSpot(3, 5),
+                            FlSpot(4, 3),
+                            FlSpot(5, 2),
+                            FlSpot(6, 5),
+                          ],
+                          isCurved: true,
+                          color: const Color(0xFF4D4B72),
+                          barWidth: 2,
+                          dotData: const FlDotData(show: true),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: const Color(0xFFD3DDF6).withOpacity(0.3),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         ],
       ),
     );
-  }
-
-  double _chartMaxY(List<int> counts) {
-    final highest = counts.fold<int>(0, (max, value) => value > max ? value : max);
-    return highest <= 0 ? 1 : highest + 1;
   }
 }
