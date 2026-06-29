@@ -9,6 +9,7 @@ class HabitListTiimoView extends StatefulWidget {
   final String? errorMessage;
   final VoidCallback onAddHabit;
   final VoidCallback onOpenTemplates;
+  final VoidCallback onOpenAiSuggestions;
   final ValueChanged<HabitModel> onOpenHabit;
   final ValueChanged<HabitModel> onEditHabit;
 
@@ -19,6 +20,7 @@ class HabitListTiimoView extends StatefulWidget {
     required this.errorMessage,
     required this.onAddHabit,
     required this.onOpenTemplates,
+    required this.onOpenAiSuggestions,
     required this.onOpenHabit,
     required this.onEditHabit,
   });
@@ -68,14 +70,16 @@ class _HabitListTiimoViewState extends State<HabitListTiimoView> {
       color: const Color(0xFFFBF8F7),
       child: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 14, 22, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+        child: Stack(
+          children: [
+            CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 14, 22, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                     _TopBar(onAddHabit: widget.onAddHabit),
                     const SizedBox(height: 34),
                     _DateHeader(date: _selectedDate),
@@ -95,7 +99,7 @@ class _HabitListTiimoViewState extends State<HabitListTiimoView> {
                     Row(
                       children: [
                         Expanded(
-                          flex: 3,
+                          flex: 2,
                           child: _TemplateButton(
                             onPressed: widget.onOpenTemplates,
                           ),
@@ -125,66 +129,75 @@ class _HabitListTiimoViewState extends State<HabitListTiimoView> {
                       ),
                     ],
                     const SizedBox(height: 14),
-                  ],
-                ),
-              ),
-            ),
-            if (widget.habits.isNotEmpty && habits.isEmpty)
-              const SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(28),
-                    child: Text(
-                      'Không có thói quen phù hợp bộ lọc.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16),
+                      ],
                     ),
                   ),
                 ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(22, 4, 22, 110),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final item = timelineItems[index];
-                      if (item is _DayPartHeaderItem) {
-                        return Padding(
-                          padding: EdgeInsets.only(
-                            top: item.isFirst ? 0 : 24,
-                            bottom: 12,
-                          ),
-                          child: Column(
-                            children: [
-                              _DayPartHeader(group: item.group),
-                              if (item.group.habits.isEmpty) ...[
-                                const SizedBox(height: 12),
-                                _EmptyDayPartSlot(
-                                  groupTitle: item.group.title,
-                                  onAddHabit: widget.onAddHabit,
-                                ),
-                              ],
-                            ],
-                          ),
-                        );
-                      }
-
-                      final habit = (item as _HabitItem).habit;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _HabitCard(
-                          habit: habit,
-                          onTap: () => widget.onOpenHabit(habit),
-                          onEdit: () => widget.onEditHabit(habit),
+                if (widget.habits.isNotEmpty && habits.isEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(28),
+                        child: Text(
+                          'Không có thói quen phù hợp bộ lọc.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 16),
                         ),
-                      );
-                    },
-                    childCount: timelineItems.length,
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 124),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final item = timelineItems[index];
+                          if (item is _DayPartHeaderItem) {
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                top: item.isFirst ? 0 : 24,
+                                bottom: 12,
+                              ),
+                              child: Column(
+                                children: [
+                                  _DayPartHeader(group: item.group),
+                                  if (item.group.habits.isEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    _EmptyDayPartSlot(
+                                      groupTitle: item.group.title,
+                                      onAddHabit: widget.onAddHabit,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }
+
+                          final habit = (item as _HabitItem).habit;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _HabitCard(
+                              habit: habit,
+                              onTap: () => widget.onOpenHabit(habit),
+                              onEdit: () => widget.onEditHabit(habit),
+                            ),
+                          );
+                        },
+                        childCount: timelineItems.length,
+                      ),
+                    ),
                   ),
-                ),
+              ],
+            ),
+            Positioned(
+              right: 22,
+              bottom: 104,
+              child: _FloatingAiButton(
+                onPressed: widget.onOpenAiSuggestions,
               ),
+            ),
           ],
         ),
       ),
@@ -293,25 +306,51 @@ class _HabitListTiimoViewState extends State<HabitListTiimoView> {
         ({String status, String category, String priority})>(
       context: context,
       backgroundColor: const Color(0xFFFBF8F7),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
+      ),
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  22,
+                  4,
+                  22,
+                  MediaQuery.viewInsetsOf(context).bottom + 24,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Bộ lọc',
-                      style: TextStyle(
-                        fontFamily: 'serif',
-                        fontSize: 34,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFE5DBFF),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.tune_rounded, color: Color(0xFF171313)),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Text(
+                            'Bộ lọc',
+                            style: TextStyle(
+                              fontFamily: 'serif',
+                              fontSize: 34,
+                              height: 1.05,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF171313),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 18),
                     _FilterGroup(
@@ -345,6 +384,14 @@ class _HabitListTiimoViewState extends State<HabitListTiimoView> {
                       children: [
                         Expanded(
                           child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF171313),
+                              side: const BorderSide(color: Color(0xFFE9E2DE)),
+                              backgroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: const StadiumBorder(),
+                              textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                            ),
                             onPressed: () {
                               Navigator.pop(
                                 sheetContext,
@@ -361,6 +408,13 @@ class _HabitListTiimoViewState extends State<HabitListTiimoView> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF171313),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: const StadiumBorder(),
+                              textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                            ),
                             onPressed: () {
                               Navigator.pop(
                                 sheetContext,
@@ -766,6 +820,92 @@ class _TemplateButton extends StatelessWidget {
   }
 }
 
+class _FloatingAiButton extends StatefulWidget {
+  final VoidCallback onPressed;
+
+  const _FloatingAiButton({required this.onPressed});
+
+  @override
+  State<_FloatingAiButton> createState() => _FloatingAiButtonState();
+}
+
+class _FloatingAiButtonState extends State<_FloatingAiButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final value = _controller.value;
+        final pulseScale = 1 + (value * 0.1);
+        final glowOpacity = 0.16 + (value * 0.12);
+        final lift = -3 * value;
+
+        return SizedBox(
+          width: 82,
+          height: 82,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Transform.scale(
+                scale: pulseScale,
+                child: Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5DBFF).withOpacity(glowOpacity),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Transform.translate(
+                offset: Offset(0, lift),
+                child: child,
+              ),
+            ],
+          ),
+        );
+      },
+      child: Material(
+        color: const Color(0xFFE5DBFF),
+        shape: const CircleBorder(),
+        elevation: 10,
+        shadowColor: Colors.black.withOpacity(0.18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: widget.onPressed,
+          child: const SizedBox(
+            width: 64,
+            height: 64,
+            child: Icon(
+              Icons.auto_awesome,
+              color: Color(0xFF171313),
+              size: 30,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FilterButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
@@ -774,15 +914,42 @@ class _FilterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: const Icon(Icons.tune),
-      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF171313),
-        side: const BorderSide(color: Color(0xFF171313), width: 2),
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: const StadiumBorder(),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE5DBFF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF171313)),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF171313),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -943,8 +1110,15 @@ class _FilterGroup extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF171313),
+          ),
+        ),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -954,6 +1128,22 @@ class _FilterGroup extends StatelessWidget {
                 label: Text(_labelForValue(value)),
                 selected: selectedValue == value,
                 onSelected: (_) => onSelected(value),
+                showCheckmark: false,
+                labelStyle: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: selectedValue == value
+                      ? const Color(0xFF171313)
+                      : const Color(0xFF5C5454),
+                ),
+                selectedColor: const Color(0xFFE5DBFF),
+                backgroundColor: Colors.white,
+                side: BorderSide(
+                  color: selectedValue == value
+                      ? const Color(0xFFE5DBFF)
+                      : const Color(0xFFE9E2DE),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                shape: const StadiumBorder(),
               ),
           ],
         ),
@@ -974,8 +1164,49 @@ class _DropdownFilter extends StatelessWidget {
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
       value: value,
-      decoration: InputDecoration(labelText: label),
-      items: values.map((item) => DropdownMenuItem(value: item, child: Text(_labelForValue(item)))).toList(),
+      isExpanded: true,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF171313)),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(
+          color: Color(0xFF5C5454),
+          fontWeight: FontWeight.w700,
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: const BorderSide(color: Color(0xFFE5DBFF), width: 2),
+        ),
+      ),
+      dropdownColor: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      style: const TextStyle(
+        color: Color(0xFF171313),
+        fontWeight: FontWeight.w800,
+        fontSize: 15,
+      ),
+      items: values
+          .map(
+            (item) => DropdownMenuItem(
+              value: item,
+              child: Text(
+                _labelForValue(item),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          )
+          .toList(),
       onChanged: (value) {
         if (value != null) onChanged(value);
       },

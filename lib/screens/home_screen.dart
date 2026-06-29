@@ -2,9 +2,11 @@
 import 'package:provider/provider.dart';
 
 import '../models/habit_model.dart';
+import '../models/ai_habit_suggestion_model.dart';
 import '../models/habit_template_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/habit_provider.dart';
+import '../services/gemini_habit_suggestion_service.dart';
 import '../utils/form_validators.dart';
 import 'calendar_screen.dart';
 import 'habit_detail_screen.dart';
@@ -162,6 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
         errorMessage: habitProvider.errorMessage,
         onAddHabit: () => _showHabitFormDialog(userId: userId),
         onOpenTemplates: () => _showTemplateSheet(userId),
+        onOpenAiSuggestions: () => _showAiSuggestionSheet(userId),
         onEditHabit: (habit) => _showHabitFormDialog(
           userId: habit.userId,
           habit: habit,
@@ -717,6 +720,277 @@ String _labelForFilter(String value) {
 }
 
 extension on _HomeScreenState {
+  Future<void> _showAiSuggestionSheet(String userId) async {
+    final habitProvider = Provider.of<HabitProvider>(context, listen: false);
+    final suggestionService = GeminiHabitSuggestionService();
+    final goalController = TextEditingController();
+    final selectedIndexes = <int>{};
+    var suggestions = <AiHabitSuggestionModel>[];
+    var isGenerating = false;
+    String? errorMessage;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFFFBF8F7),
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final canAdd = selectedIndexes.isNotEmpty && !isGenerating;
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  22,
+                  0,
+                  22,
+                  MediaQuery.viewInsetsOf(context).bottom + 24,
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (suggestions.isNotEmpty) ...[
+                          Material(
+                            color: Colors.white,
+                            shape: const CircleBorder(),
+                            clipBehavior: Clip.antiAlias,
+                            child: InkWell(
+                              onTap: () => Navigator.of(sheetContext).pop(),
+                              child: const SizedBox(
+                                width: 46,
+                                height: 46,
+                                child: Icon(
+                                  Icons.arrow_back_rounded,
+                                  color: Color(0xFF171313),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        const Expanded(
+                          child: Text(
+                            'AI gợi ý thói quen',
+                            style: TextStyle(
+                              fontFamily: 'serif',
+                              fontSize: 34,
+                              height: 1.05,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF171313),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Nhập mục tiêu cá nhân, chọn thói quen phù hợp rồi thêm vào danh sách.',
+                      style: TextStyle(fontSize: 16, color: Color(0xFF5C5454)),
+                    ),
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: goalController,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: 'Ví dụ: Tôi muốn học tiếng Anh tốt hơn',
+                        filled: true,
+                        fillColor: Colors.white,
+                        prefixIcon: const Icon(Icons.psychology_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: isGenerating
+                            ? null
+                            : () async {
+                                FocusManager.instance.primaryFocus?.unfocus();
+                                setSheetState(() {
+                                  selectedIndexes.clear();
+                                  suggestions = <AiHabitSuggestionModel>[];
+                                  errorMessage = null;
+                                  isGenerating = true;
+                                });
+
+                                try {
+                                  final result = await suggestionService
+                                      .generateSuggestions(goalController.text);
+                                  if (!context.mounted) return;
+                                  setSheetState(() {
+                                    suggestions = result;
+                                  });
+                                } catch (error) {
+                                  if (!context.mounted) return;
+                                  setSheetState(() {
+                                    final detail = error.toString();
+                                    errorMessage = detail.length > 280
+                                        ? '${detail.substring(0, 280)}...'
+                                        : detail;
+                                  });
+                                } finally {
+                                  if (context.mounted) {
+                                    setSheetState(() {
+                                      isGenerating = false;
+                                    });
+                                  }
+                                }
+                              },
+                        icon: isGenerating
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.auto_awesome),
+                        label: Text(
+                          isGenerating ? 'Đang tạo gợi ý' : 'Tạo gợi ý',
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF171313),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
+                    ),
+                    if (errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        errorMessage!,
+                        style: const TextStyle(
+                          color: Color(0xFFB3261E),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    if (suggestions.isNotEmpty) ...[
+                      const SizedBox(height: 18),
+                      for (var index = 0; index < suggestions.length; index++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _AiSuggestionTile(
+                            selected: selectedIndexes.contains(index),
+                            suggestionName: suggestions[index].name,
+                            description: suggestions[index].description,
+                            category: suggestions[index].category,
+                            reason: suggestions[index].reason,
+                            onChanged: (selected) {
+                              setSheetState(() {
+                                if (selected) {
+                                  selectedIndexes.add(index);
+                                } else {
+                                  selectedIndexes.remove(index);
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setSheetState(() {
+                                  selectedIndexes
+                                    ..clear()
+                                    ..addAll(
+                                      List.generate(
+                                        suggestions.length,
+                                        (index) => index,
+                                      ),
+                                    );
+                                });
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF171313),
+                                side: const BorderSide(
+                                  color: Color(0xFF171313),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: const StadiumBorder(),
+                              ),
+                              child: const Text('Chọn tất cả'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: canAdd
+                                  ? () async {
+                                      final messenger =
+                                          ScaffoldMessenger.of(context);
+                                      var successCount = 0;
+                                      final selectedSuggestions =
+                                          selectedIndexes
+                                              .map((index) =>
+                                                  suggestions[index])
+                                              .toList();
+                                      for (final suggestion
+                                          in selectedSuggestions) {
+                                        final success =
+                                            await habitProvider.addHabit(
+                                          suggestion.toHabit(userId),
+                                        );
+                                        if (success) successCount++;
+                                      }
+
+                                      if (!context.mounted ||
+                                          !sheetContext.mounted) {
+                                        return;
+                                      }
+
+                                      Navigator.pop(sheetContext);
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Đã thêm $successCount thói quen từ AI.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF171313),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: const StadiumBorder(),
+                              ),
+                              child: const Text('Thêm đã chọn'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    goalController.dispose();
+  }
+
   Future<void> _showTemplateSheet(String userId) async {
     final habitProvider = Provider.of<HabitProvider>(context, listen: false);
     await habitProvider.fetchHabitTemplates();
@@ -1127,8 +1401,8 @@ class _TiimoBottomNav extends StatelessWidget {
             onTap: () => onSelected(1),
           ),
           _NavIcon(
-            icon: Icons.more_horiz,
-            selectedIcon: Icons.more_horiz,
+            icon: Icons.account_circle_outlined,
+            selectedIcon: Icons.account_circle_rounded,
             selected: false,
             onTap: onAccountPressed,
           ),
@@ -1197,6 +1471,89 @@ class _AccountActionTile extends StatelessWidget {
           title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
           trailing: const Icon(Icons.arrow_forward_rounded),
           onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
+class _AiSuggestionTile extends StatelessWidget {
+  final bool selected;
+  final String suggestionName;
+  final String description;
+  final String category;
+  final String reason;
+  final ValueChanged<bool> onChanged;
+
+  const _AiSuggestionTile({
+    required this.selected,
+    required this.suggestionName,
+    required this.description,
+    required this.category,
+    required this.reason,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => onChanged(!selected),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Checkbox(
+                value: selected,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                onChanged: (value) => onChanged(value ?? false),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      suggestionName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF171313),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.3,
+                        color: Color(0xFF5C5454),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _HabitChip(label: category),
+                        _HabitChip(label: reason),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -3,22 +3,29 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/habit_completion_model.dart';
+import '../models/ai_habit_suggestion_model.dart';
 import '../models/habit_model.dart';
 import '../models/habit_template_model.dart';
 import '../repositories/habit_repository.dart';
+import '../services/ai_habit_suggestion_service.dart';
 
 class HabitProvider with ChangeNotifier {
   final HabitRepository _repository = HabitRepository();
+  final AiHabitSuggestionService _aiSuggestionService = AiHabitSuggestionService();
   StreamSubscription<List<HabitModel>>? _habitSubscription;
   List<HabitModel> _habits = [];
   List<HabitTemplateModel> _templates = _defaultTemplates;
+  List<AiHabitSuggestionModel> _aiSuggestions = [];
   bool _isLoading = false;
+  bool _isGeneratingSuggestions = false;
   String? _errorMessage;
   String? _currentUserId;
 
   List<HabitModel> get habits => _habits;
   List<HabitTemplateModel> get templates => _templates;
+  List<AiHabitSuggestionModel> get aiSuggestions => _aiSuggestions;
   bool get isLoading => _isLoading;
+  bool get isGeneratingSuggestions => _isGeneratingSuggestions;
   String? get errorMessage => _errorMessage;
 
   void fetchHabits(String userId) {
@@ -66,6 +73,35 @@ class HabitProvider with ChangeNotifier {
     } catch (_) {
       _templates = _defaultTemplates;
     }
+  }
+
+  Future<void> generateHabitSuggestions(String goalText) async {
+    final goal = goalText.trim();
+    if (goal.isEmpty) {
+      _errorMessage = 'Vui lòng nhập mục tiêu trước khi tạo gợi ý.';
+      _aiSuggestions = [];
+      notifyListeners();
+      return;
+    }
+
+    _isGeneratingSuggestions = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      _aiSuggestions = await _aiSuggestionService.generateSuggestions(goal);
+    } catch (_) {
+      _aiSuggestions = [];
+      _errorMessage = 'Không thể tạo gợi ý lúc này. Vui lòng thử lại.';
+    } finally {
+      _isGeneratingSuggestions = false;
+      notifyListeners();
+    }
+  }
+
+  void clearHabitSuggestions() {
+    _aiSuggestions = [];
+    notifyListeners();
   }
 
   Future<bool> updateHabit(HabitModel habit) async {
