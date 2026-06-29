@@ -47,4 +47,3 @@ app.*.map.json
 # Local secrets
 .env
 .env.*
-!.env.example

@@ -133,6 +133,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           : const Icon(Icons.save_outlined),
                       label: const Text('Lưu profile'),
                     ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: authProvider.isLoading ? null : () => authProvider.logout(),
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Đăng xuất'),
+                    ),
                   ],
                 ),
               ),
