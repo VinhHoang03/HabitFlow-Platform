@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/achievement_model.dart';
-import '../models/habit_log_model.dart';
+import '../models/habit_completion_model.dart';
 import '../models/habit_model.dart';
 import '../repositories/statistics_repository.dart';
 
@@ -11,25 +11,25 @@ class StatisticsProvider with ChangeNotifier {
   StatisticsRepository? _repository;
   StatisticsRepository get repository => _repository ??= StatisticsRepository();
 
-  StreamSubscription<List<HabitLogModel>>? _logsSubscription;
+  StreamSubscription<List<HabitCompletionModel>>? _completionsSubscription;
   StreamSubscription<List<AchievementModel>>? _achievementsSubscription;
   StreamSubscription<Set<String>>? _unlockedSubscription;
 
   List<HabitModel> _habits = [];
-  List<HabitLogModel> _logs = [];
+  List<HabitCompletionModel> _completions = [];
   List<AchievementModel> _achievements = AchievementModel.defaultAchievements;
   Set<String> _unlockedAchievementIds = {};
   String? _userId;
   String _habitKey = '';
 
-  List<HabitLogModel> get completedLogs =>
-      _logs.where((log) => log.completed).toList();
+  List<HabitCompletionModel> get completedCompletions =>
+      _completions.where((completion) => completion.isCompleted).toList();
   List<AchievementModel> get achievements => _achievements;
   Set<String> get unlockedAchievementIds => _unlockedAchievementIds;
 
-  int get completedCount => completedLogs.length;
-  int get currentStreak => _calculateCurrentStreak(completedLogs);
-  int get bestStreak => _calculateBestStreak(completedLogs);
+  int get completedCount => completedCompletions.length;
+  int get currentStreak => _calculateCurrentStreak(completedCompletions);
+  int get bestStreak => _calculateBestStreak(completedCompletions);
 
   double get completionRate {
     if (_habits.isEmpty) {
@@ -51,7 +51,9 @@ class StatisticsProvider with ChangeNotifier {
 
     return List.generate(7, (index) {
       final day = monday.add(Duration(days: index));
-      return completedLogs.where((log) => _isSameDay(log.date, day)).length;
+      return completedCompletions
+          .where((completion) => _isSameDay(completion.date, day))
+          .length;
     });
   }
 
@@ -59,9 +61,10 @@ class StatisticsProvider with ChangeNotifier {
     final now = DateTime.now();
     final weeks = List<int>.filled(5, 0);
 
-    for (final log in completedLogs) {
-      if (log.date.year == now.year && log.date.month == now.month) {
-        final weekIndex = ((log.date.day - 1) / 7).floor().clamp(0, 4);
+    for (final completion in completedCompletions) {
+      if (completion.date.year == now.year &&
+          completion.date.month == now.month) {
+        final weekIndex = ((completion.date.day - 1) / 7).floor().clamp(0, 4);
         weeks[weekIndex]++;
       }
     }
@@ -81,12 +84,14 @@ class StatisticsProvider with ChangeNotifier {
     _habitKey = joinedHabitKey;
     _habits = habits;
 
-    _logsSubscription?.cancel();
-    _logsSubscription = repository.streamUserHabitLogs(habits).listen((logs) {
-      _logs = logs;
-      _syncUnlockedAchievements();
-      notifyListeners();
-    });
+    _completionsSubscription?.cancel();
+    _completionsSubscription = repository
+        .streamUserHabitCompletions(habits)
+        .listen((completions) {
+          _completions = completions;
+          _syncUnlockedAchievements();
+          notifyListeners();
+        });
 
     _achievementsSubscription ??= repository.streamAchievements().listen((
       achievements,
@@ -137,8 +142,8 @@ class StatisticsProvider with ChangeNotifier {
     return progressFor(achievement) >= achievement.target;
   }
 
-  int _calculateCurrentStreak(List<HabitLogModel> logs) {
-    final completedDays = _completedDays(logs);
+  int _calculateCurrentStreak(List<HabitCompletionModel> completions) {
+    final completedDays = _completedDays(completions);
     if (completedDays.isEmpty) {
       return 0;
     }
@@ -157,8 +162,8 @@ class StatisticsProvider with ChangeNotifier {
     return streak;
   }
 
-  int _calculateBestStreak(List<HabitLogModel> logs) {
-    final days = _completedDays(logs).toList()..sort();
+  int _calculateBestStreak(List<HabitCompletionModel> completions) {
+    final days = _completedDays(completions).toList()..sort();
     if (days.isEmpty) {
       return 0;
     }
@@ -182,8 +187,10 @@ class StatisticsProvider with ChangeNotifier {
     return best;
   }
 
-  Set<DateTime> _completedDays(List<HabitLogModel> logs) {
-    return logs.map((log) => _startOfDay(log.date)).toSet();
+  Set<DateTime> _completedDays(List<HabitCompletionModel> completions) {
+    return completions
+        .map((completion) => _startOfDay(completion.date))
+        .toSet();
   }
 
   DateTime _startOfDay(DateTime date) {
@@ -198,7 +205,7 @@ class StatisticsProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _logsSubscription?.cancel();
+    _completionsSubscription?.cancel();
     _achievementsSubscription?.cancel();
     _unlockedSubscription?.cancel();
     super.dispose();

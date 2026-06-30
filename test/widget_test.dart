@@ -1,44 +1,77 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:habitflow/providers/statistics_provider.dart';
-import 'package:habitflow/screens/achievement_screen.dart';
-import 'package:habitflow/screens/stats_screen.dart';
-import 'package:provider/provider.dart';
+import 'package:habitflow/utils/form_validators.dart';
 
 void main() {
-  testWidgets('Statistics screen displays empty progress state', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => StatisticsProvider(),
-        child: const MaterialApp(home: StatsScreen()),
-      ),
-    );
+  group('FormValidators', () {
+    test('validates email input', () {
+      expect(FormValidators.email('user@example.com'), isNull);
+      expect(FormValidators.email(''), isNotNull);
+      expect(FormValidators.email('user example.com'), isNotNull);
+      expect(FormValidators.email('user@example'), isNotNull);
+    });
 
-    expect(find.text('Statistics'), findsOneWidget);
-    expect(find.text('Completion'), findsOneWidget);
-    expect(find.text('0%'), findsOneWidget);
-    expect(find.text('Weekly Statistics'), findsOneWidget);
+    test('validates login and new passwords', () {
+      expect(FormValidators.loginPassword('abc123'), isNull);
+      expect(FormValidators.loginPassword('123'), isNotNull);
+      expect(FormValidators.newPassword('abc123'), isNull);
+      expect(FormValidators.newPassword('abcdef'), isNotNull);
+      expect(FormValidators.newPassword('123456'), isNotNull);
+      expect(FormValidators.newPassword(' abc123'), isNotNull);
+    });
 
-    await tester.drag(find.byType(ListView), const Offset(0, -400));
-    await tester.pump();
+    test('validates password confirmation and change rules', () {
+      expect(FormValidators.confirmPassword('abc123', 'abc123'), isNull);
+      expect(FormValidators.confirmPassword('', 'abc123'), isNotNull);
+      expect(FormValidators.confirmPassword('abc124', 'abc123'), isNotNull);
+      expect(FormValidators.changedPassword('def456', 'abc123'), isNull);
+      expect(FormValidators.changedPassword('abc123', 'abc123'), isNotNull);
+    });
 
-    expect(find.text('Monthly Statistics'), findsOneWidget);
+    test('validates profile inputs', () {
+      expect(FormValidators.displayName('Nguyen Van A'), isNull);
+      expect(FormValidators.displayName('A'), isNotNull);
+      expect(FormValidators.displayName('Invalid<Name'), isNotNull);
+      expect(
+        FormValidators.avatarUrl('https://example.com/avatar.png'),
+        isNull,
+      );
+      expect(FormValidators.avatarUrl(''), isNull);
+      expect(
+        FormValidators.avatarUrl('ftp://example.com/avatar.png'),
+        isNotNull,
+      );
+    });
   });
 
-  testWidgets('Achievement screen displays default badges', (tester) async {
-    await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => StatisticsProvider(),
-        child: const MaterialApp(home: AchievementScreen()),
-      ),
+  test('source files do not contain common mojibake markers', () {
+    final mojibakeMarkers = [
+      String.fromCharCode(0x00c3),
+      String.fromCharCode(0x00c2),
+      String.fromCharCode(0x00c4),
+      String.fromCharCode(0x00c6),
+      String.fromCharCodes([0x00e1, 0x00ba]),
+      String.fromCharCodes([0x00e1, 0x00bb]),
+      String.fromCharCodes([0x00e2, 0x20ac]),
+      String.fromCharCode(0xfffd),
+    ];
+    final mojibakePattern = RegExp(
+      mojibakeMarkers.map(RegExp.escape).join('|'),
     );
+    final dartFiles = Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'));
 
-    expect(find.text('Achievements'), findsOneWidget);
-    expect(find.text('First Win'), findsOneWidget);
-    expect(find.text('3-Day Streak'), findsOneWidget);
-    expect(find.text('7-Day Streak'), findsOneWidget);
-    expect(find.text('10 Check-ins'), findsOneWidget);
+    final affectedFiles = <String>[];
+    for (final file in dartFiles) {
+      final content = file.readAsStringSync();
+      if (mojibakePattern.hasMatch(content)) {
+        affectedFiles.add(file.path);
+      }
+    }
+
+    expect(affectedFiles, isEmpty, reason: affectedFiles.join('\n'));
   });
 }

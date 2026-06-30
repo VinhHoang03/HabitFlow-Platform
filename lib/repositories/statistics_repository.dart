@@ -1,13 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/achievement_model.dart';
-import '../models/habit_log_model.dart';
+import '../models/habit_completion_model.dart';
 import '../models/habit_model.dart';
 
 class StatisticsRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  Stream<List<HabitLogModel>> streamUserHabitLogs(List<HabitModel> habits) {
+  Stream<List<HabitCompletionModel>> streamUserHabitCompletions(
+    List<HabitModel> habits,
+  ) {
     final habitIds = habits
         .map((habit) => habit.habitId)
         .where((id) => id.isNotEmpty)
@@ -17,10 +19,10 @@ class StatisticsRepository {
       return Stream.value([]);
     }
 
-    return _db.collection('habit_logs').snapshots().map((snapshot) {
+    return _db.collection('habit_completions').snapshots().map((snapshot) {
       return snapshot.docs
-          .map((doc) => HabitLogModel.fromMap(doc.data(), doc.id))
-          .where((log) => habitIds.contains(log.habitId))
+          .map((doc) => HabitCompletionModel.fromMap(doc.data(), doc.id))
+          .where((completion) => habitIds.contains(completion.habitId))
           .toList();
     });
   }
